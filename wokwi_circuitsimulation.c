@@ -1,3 +1,8 @@
+//Smart Crutch Circuit on wokwi 
+//embedded c
+//AI assisted
+//written on 9th FEB 2025
+
 #include "HX711.h"
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
