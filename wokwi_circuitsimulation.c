@@ -40,8 +40,8 @@ bool fallFlag = false;
 // ---------- System Power ----------
 bool systemOn = true;   // derived directly from slide switch
 
-#define SOS_PIN 17
-#define CHARGE_DETECT_PIN 16
+#define SOS_PIN 17  // PUSH BUTTON
+#define CHARGE_DETECT_PIN 16 // PUSH BUTTON
 #define POWER_SWITCH_PIN 4   // SLIDE SWITCH
 
 #define HX_DOUT  21
