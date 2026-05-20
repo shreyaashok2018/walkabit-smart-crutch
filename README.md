@@ -1,6 +1,3 @@
-# productdesignclub_codes
-Codes written for projects by the product design club at IITM. 
-
 Smart Crutch – Embedded Assistive System (Wokwi Simulation)
 
 Date: 9 Feb 2025
