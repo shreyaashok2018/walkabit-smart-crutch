@@ -21,6 +21,7 @@ MAX30102 (Mocked in simulation)
 Simulated heart rate and SpO2 readings.
 Battery + Charging Simulation
 Models charge/discharge behaviour.
+LEDs and Buzzers to alert users.
 
 Core Functionalities
 1. Load Monitoring

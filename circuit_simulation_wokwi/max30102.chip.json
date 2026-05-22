@@ -1,0 +1,11 @@
+{
+  "name": "max30102",
+  "author": "Shreya Ashok",
+  "pins": [
+    "VCC",
+    "GND",
+    "IN",
+    "OUT"
+  ],
+  "controls": []
+}

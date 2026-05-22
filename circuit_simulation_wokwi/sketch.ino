@@ -1,8 +1,3 @@
-//Smart Crutch Circuit on wokwi 
-//embedded c
-//AI assisted
-//written on 9th FEB 2025
-
 #include "HX711.h"
 #include <Wire.h>
 #include <Adafruit_MPU6050.h>
@@ -12,8 +7,12 @@ Adafruit_MPU6050 mpu;
 
 // ---------- Main Loop Timing ----------
 unsigned long lastLoopTime = 0;
-const unsigned long LOOP_INTERVAL = 3000; // 3 seconds per cycle
+const unsigned long LOOP_INTERVAL = 3000;
 unsigned long lastHXRead = 0;
+
+// ---------- LED / BUZZER TIMING ----------
+unsigned long lastBlink = 0;
+bool ledState = false;
 
 // ---------- BLE Data Packet ----------
 struct CrutchPacket {
@@ -38,14 +37,19 @@ float lastSpO2 = 0;
 bool fallFlag = false;
 
 // ---------- System Power ----------
-bool systemOn = true;   // derived directly from slide switch
+bool systemOn = true;
 
-#define SOS_PIN 17  // PUSH BUTTON
-#define CHARGE_DETECT_PIN 16 // PUSH BUTTON
-#define POWER_SWITCH_PIN 4   // SLIDE SWITCH
+#define SOS_PIN 17
+#define CHARGE_DETECT_PIN 16
+#define POWER_SWITCH_PIN 4
 
-#define HX_DOUT  21
-#define HX_SCK   19
+// ---------- ALERT OUTPUT ----------
+#define POWER_LED 13
+#define SOS_LED 12
+#define BUZZER 14
+
+#define HX_DOUT 21
+#define HX_SCK 19
 
 HX711 scale;
 
@@ -56,8 +60,8 @@ struct Vitals {
 };
 
 // ---------- Battery & Charging ----------
-float batteryLevel = 100.0;   // percentage
-bool charging = false;        // USB connected or not
+float batteryLevel = 100.0;
+bool charging = false;
 unsigned long lastBatteryUpdate = 0;
 
 void setup() {
@@ -67,7 +71,9 @@ void setup() {
   pinMode(CHARGE_DETECT_PIN, INPUT_PULLUP);
   pinMode(POWER_SWITCH_PIN, INPUT_PULLUP);
 
-  Serial.println("Hello, ESP32!");
+  pinMode(POWER_LED, OUTPUT);
+  pinMode(SOS_LED, OUTPUT);
+  pinMode(BUZZER, OUTPUT);
 
   scale.begin(HX_DOUT, HX_SCK);
   scale.set_scale(420.0);
@@ -90,35 +96,53 @@ void setup() {
 }
 
 void loop() {
+
   unsigned long now = millis();
 
-  // ----- ALWAYS ACTIVE -----
+  // ----- POWER STATE -----
   systemOn = (digitalRead(POWER_SWITCH_PIN) == LOW);
   charging = (digitalRead(CHARGE_DETECT_PIN) == LOW);
 
-  updateBattery();
-  checkweight();   // HX711 must always be sampled
+  digitalWrite(POWER_LED, systemOn);
 
-  // ----- SYSTEM OFF STATE -----
+  updateBattery();
+  checkweight();
+
+  // ----- SYSTEM OFF -----
   if (!systemOn) {
-    static bool shown = false;
-    if (!shown) {
-      Serial.println("🔌 SYSTEM OFF (Charging Active)");
-      shown = true;
-    }
+    digitalWrite(SOS_LED, LOW);
+    digitalWrite(BUZZER, LOW);
     return;
   }
-  static bool shown = false;
-  shown = false;
+
+  // ----- SOS ALERT -----
+  bool sos = digitalRead(SOS_PIN) == LOW;
+
+  if (sos) {
+
+    if (now - lastBlink > 300) {
+      lastBlink = now;
+      ledState = !ledState;
+
+      digitalWrite(SOS_LED, ledState);
+      digitalWrite(BUZZER, ledState);
+    }
+
+  } else {
+
+    digitalWrite(SOS_LED, LOW);
+    digitalWrite(BUZZER, LOW);
+
+  }
 
   // ----- MAIN SYSTEM UPDATE -----
   if (now - lastLoopTime >= LOOP_INTERVAL) {
+
     lastLoopTime = now;
 
     Serial.println("\n==============================");
     Serial.println("🔁 System Update");
 
-    checkSOS();
     checkIMU();
     checkVitals();
 
@@ -126,17 +150,6 @@ void loop() {
     Serial.println(lastWeight);
 
     sendBLEPacket();
-  }
-}
-
-// ---------- SOS ----------
-void checkSOS() {
-  static unsigned long lastPress = 0;
-  if (digitalRead(SOS_PIN) == LOW) {
-    if (millis() - lastPress > 500) {
-      Serial.println("🚨 SOS PRESSED!");
-      lastPress = millis();
-    }
   }
 }
 
@@ -152,6 +165,7 @@ void checkweight() {
 
 // ---------- IMU ----------
 void checkIMU() {
+
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
 
@@ -162,7 +176,7 @@ void checkIMU() {
   float accMag = sqrt(ax * ax + ay * ay + az * az);
 
   float pitch = atan2(ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
-  float roll  = atan2(ay, sqrt(ax * ax + az * az)) * 180.0 / PI;
+  float roll = atan2(ay, sqrt(ax * ax + az * az)) * 180.0 / PI;
 
   lastPitch = pitch;
   lastRoll = roll;
@@ -172,17 +186,17 @@ void checkIMU() {
 
   Serial.print("Pitch: ");
   Serial.print(pitch);
-  Serial.print(" deg | Roll: ");
+  Serial.print(" Roll: ");
   Serial.print(roll);
-  Serial.print(" deg | AccMag: ");
+  Serial.print(" Acc: ");
   Serial.println(accMag);
 
   if (fallFlag) {
-    Serial.println("Possible fall (free fall / impact)");
+    Serial.println("Possible fall detected");
   }
 }
 
-// ---------- MAX30102 (Mock) ----------
+// ---------- MAX30102 MOCK ----------
 Vitals readMAX30102() {
   Vitals v;
   v.heartRate = random(65, 90);
@@ -192,61 +206,46 @@ Vitals readMAX30102() {
 }
 
 void checkVitals() {
+
   Vitals v = readMAX30102();
+
   lastHR = v.heartRate;
   lastSpO2 = v.spo2;
 
   Serial.print("HR: ");
   Serial.print(v.heartRate);
-  Serial.print(" BPM | SpO2: ");
-  Serial.print(v.spo2);
-  Serial.println(" %");
+  Serial.print(" BPM SpO2: ");
+  Serial.println(v.spo2);
 }
 
 // ---------- BATTERY ----------
 void updateBattery() {
+
   unsigned long now = millis();
+
   if (now - lastBatteryUpdate < 1000) return;
+
   lastBatteryUpdate = now;
 
-  if (charging) {
+  if (charging)
     batteryLevel += 0.3;
-    if (batteryLevel > 100) batteryLevel = 100;
-  } else {
+  else
     batteryLevel -= 0.05;
-    if (batteryLevel < 0) batteryLevel = 0;
-  }
 
-  Serial.print("🔋 Battery: ");
-  Serial.print(batteryLevel, 1);
-  Serial.print("% ");
-  Serial.println(charging ? "(Charging)" : "(Discharging)");
+  batteryLevel = constrain(batteryLevel, 0, 100);
+
+  Serial.print("Battery: ");
+  Serial.print(batteryLevel);
+  Serial.println("%");
 }
 
 // ---------- BLE ----------
 void sendBLEPacket() {
-  CrutchPacket pkt;
 
-  pkt.load = lastWeight;
-  pkt.pitch = lastPitch;
-  pkt.roll = lastRoll;
-  pkt.accMag = lastAccMag;
-  pkt.heartRate = lastHR;
-  pkt.spo2 = lastSpO2;
-  pkt.battery = batteryLevel;
-  pkt.fallDetected = fallFlag;
-  pkt.sos = (digitalRead(SOS_PIN) == LOW);
-
-  Serial.println("📡 BLE Packet → Mobile App");
-  Serial.print("{ ");
-  Serial.print("\"load\": "); Serial.print(pkt.load); Serial.print(", ");
-  Serial.print("\"pitch\": "); Serial.print(pkt.pitch); Serial.print(", ");
-  Serial.print("\"roll\": "); Serial.print(pkt.roll); Serial.print(", ");
-  Serial.print("\"accMag\": "); Serial.print(pkt.accMag); Serial.print(", ");
-  Serial.print("\"HR\": "); Serial.print(pkt.heartRate); Serial.print(", ");
-  Serial.print("\"SpO2\": "); Serial.print(pkt.spo2); Serial.print(", ");
-  Serial.print("\"battery\": "); Serial.print(pkt.battery); Serial.print(", ");
-  Serial.print("\"fall\": "); Serial.print(pkt.fallDetected); Serial.print(", ");
-  Serial.print("\"sos\": "); Serial.print(pkt.sos);
-  Serial.println(" }");
+  Serial.print("{");
+  Serial.print("\"pitch\":"); Serial.print(lastPitch); Serial.print(",");
+  Serial.print("\"roll\":"); Serial.print(lastRoll); Serial.print(",");
+  Serial.print("\"acc\":"); Serial.print(lastAccMag); Serial.print(",");
+  Serial.print("\"sos\":"); Serial.print(digitalRead(SOS_PIN)==LOW);
+  Serial.println("}");
 }

@@ -1,0 +1,11 @@
+{
+  "name": "tp4056-fordisplayonly",
+  "author": "Shreya Ashok",
+  "pins": [
+    "VCC",
+    "GND",
+    "IN",
+    "OUT"
+  ],
+  "controls": []
+}

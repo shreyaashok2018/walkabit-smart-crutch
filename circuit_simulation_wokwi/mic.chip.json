@@ -1,0 +1,11 @@
+{
+  "name": "mic",
+  "author": "Shreya Ashok",
+  "pins": [
+    "VCC",
+    "GND",
+    "IN",
+    "OUT"
+  ],
+  "controls": []
+}

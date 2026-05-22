@@ -1,0 +1,11 @@
+{
+  "name": "transistor",
+  "author": "Shreya Ashok",
+  "pins": [
+    "VCC",
+    "GND",
+    "IN",
+    "OUT"
+  ],
+  "controls": []
+}
